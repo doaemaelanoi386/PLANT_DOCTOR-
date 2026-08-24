@@ -162,8 +162,6 @@ const scanLine = document.getElementById('scan-line');
 const formSection = document.getElementById('form-section');
 const resultSection = document.getElementById('result-section');
 
-// Load Thailand province/district list (public dataset) so farmers pick from a
-// dropdown instead of typing. Both fields stay optional.
 let districtsByProvince = {};
 (async function loadLocationData() {
   try {
@@ -189,8 +187,6 @@ let districtsByProvince = {};
         provinceSelect.appendChild(opt);
       });
   } catch (e) {
-    // If the location list fails to load (e.g. offline), leave the selects
-    // as "ไม่ระบุ" only — location stays optional so the app still works.
     provinceSelect.disabled = true;
     districtSelect.disabled = true;
   }
@@ -220,39 +216,64 @@ function updateAnalyzeState() {
 }
 
 dropEl.addEventListener('click', () => fileInput.click());
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8MB
+
+// ฟังก์ชันบีบอัดรูปภาพฝั่ง Client แก้ปัญหาบน Safari/iOS ถาวร
+function processAndCompressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1024;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const base64 = dataUrl.split(',')[1];
+        resolve({ base64, mediaType: 'image/jpeg', dataUrl });
+      };
+      img.onerror = () => reject(new Error('ไม่สามารถโหลดรูปภาพได้'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+    reader.readAsDataURL(file);
+  });
+}
 
 fileInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    errorBox.textContent = 'รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, WEBP หรือ GIF เท่านั้น';
-    errorBox.style.display = 'block';
-    fileInput.value = '';
-    return;
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    errorBox.textContent = 'ไฟล์รูปใหญ่เกินไป (ไม่เกิน 8MB)';
-    errorBox.style.display = 'block';
-    fileInput.value = '';
-    return;
-  }
+  
   errorBox.style.display = 'none';
-  imageMediaType = file.type;
-  imageBase64 = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1]);
-    reader.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
-    reader.readAsDataURL(file);
-  });
-  previewUrl = URL.createObjectURL(file);
-  previewImg.src = previewUrl;
-  previewWrap.style.display = 'block';
-  dropHint.style.display = 'none';
-  dropEl.classList.add('has-image');
-  updateAnalyzeState();
+  try {
+    const processed = await processAndCompressImage(file);
+    imageMediaType = processed.mediaType;
+    imageBase64 = processed.base64;
+    previewUrl = processed.dataUrl;
+
+    previewImg.src = previewUrl;
+    previewWrap.style.display = 'block';
+    dropHint.style.display = 'none';
+    dropEl.classList.add('has-image');
+    updateAnalyzeState();
+  } catch (err) {
+    errorBox.textContent = 'ไม่สามารถประมวลผลรูปภาพได้ กรุณาลองใช้อีกรูป';
+    errorBox.style.display = 'block';
+    fileInput.value = '';
+  }
 });
+
 removeBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   imageBase64 = null; imageMediaType = null; previewUrl = null;
@@ -360,7 +381,6 @@ function makeChemSection(title, items) {
     el('div', { className: 'section-title', textContent: title })
   ]);
   items.forEach((item, i) => {
-    // Support both the new structured object format and a plain string as a fallback
     if (typeof item === 'string') {
       wrap.appendChild(el('div', { className: 'chem-card' }, [
         el('div', { className: 'chem-name', textContent: item })

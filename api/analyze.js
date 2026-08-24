@@ -79,8 +79,8 @@ module.exports = async (req, res) => {
     const parts = [];
     if (imageBase64) {
       parts.push({
-        inline_data: {
-          mime_type: imageMediaType,
+        inlineData: {
+          mimeType: imageMediaType,
           data: imageBase64,
         },
       });
@@ -101,25 +101,17 @@ module.exports = async (req, res) => {
   "symptoms": "อธิบายอาการที่พบ 1 ประโยคสั้นกระชับ",
   "cause": "สาเหตุของปัญหา 1 ประโยค",
   "organic_control": ["วิธีป้องกันกำจัดแบบอินทรีย์/เขตกรรม 1-2 ข้อ"],
-  "chemical_control": [
-    {
-      "name": "ชื่อสารออกฤทธิ์ (ชื่อกลุ่มสาร)",
-      "rate": "อัตราการใช้",
-      "method": "วิธีใช้และความถี่",
-      "caution": "ข้อควรระวัง"
-    }
-  ],
+  "chemical_control": ["ชื่อสารเคมีที่แนะนำ 1", "ชื่อสารเคมีที่แนะนำ 2"],
   "prevention": ["วิธีป้องกันไม่ให้เกิดซ้ำ"],
   "need_more_info": "ระบุข้อมูลที่ต้องการเพิ่ม (ถ้าข้อมูลพอแล้วให้เว้นว่าง)"
 }
 
-สำหรับ chemical_control: แนะนำสารที่ขึ้นทะเบียนถูกต้อง 2-3 รายการ เรียงจากแนะนำมากไปน้อย สารต่างกลุ่มกัน อธิบายสั้นกระชับ นำไปปฏิบัติได้จริง
-
+สำหรับ chemical_control: ระบุเฉพาะชื่อสารออกฤทธิ์หรือชื่อกลุ่มสารแบบสั้นๆ 2-3 รายการ
 ถ้าภาพ/ข้อความไม่เกี่ยวกับเกษตร ตั้ง category เป็น "unclear"`;
 
     parts.push({ text: prompt });
 
-    const model = "gemini-flash-latest";
+    const model = "gemini-1.5-flash";
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {

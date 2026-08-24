@@ -2,16 +2,13 @@
 // Deploy this whole folder to Vercel and set the GEMINI_API_KEY environment variable
 // in the Vercel project settings (Settings -> Environment Variables).
 
-// Allowed image types and their real file "magic bytes" — checked against the
-// actual decoded bytes, not the filename or the client-declared MIME type,
-// since either of those can be spoofed to smuggle a non-image file through.
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB decoded
 const MAX_TEXT_LENGTH = 1000;
 const MAX_LOCATION_LENGTH = 100;
 const MAGIC_BYTES = {
   "image/jpeg": [[0xff, 0xd8, 0xff]],
   "image/png": [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
-  "image/webp": [[0x52, 0x49, 0x46, 0x46]], // "RIFF"; WEBP marker follows at byte 8
+  "image/webp": [[0x52, 0x49, 0x46, 0x46]],
   "image/gif": [
     [0x47, 0x49, 0x46, 0x38, 0x37, 0x61],
     [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
@@ -25,11 +22,10 @@ function matchesSignature(buf, signature) {
 
 function isGenuineImage(buf, declaredType) {
   const signatures = MAGIC_BYTES[declaredType];
-  if (!signatures) return false; // unsupported / unrecognized declared type
+  if (!signatures) return false;
   const matchesDeclared = signatures.some((sig) => matchesSignature(buf, sig));
   if (!matchesDeclared) return false;
   if (declaredType === "image/webp") {
-    // RIFF containers are shared by other formats too — confirm the WEBP marker at offset 8
     const webpMarker = buf.slice(8, 12).toString("ascii");
     if (webpMarker !== "WEBP") return false;
   }
@@ -96,34 +92,30 @@ module.exports = async (req, res) => {
 - อาการ/คำอธิบาย: ${trimmedText ? trimmedText : "(ไม่มีคำอธิบาย มีเฉพาะภาพ)"}
 - พื้นที่: ${trimmedProvince && trimmedDistrict ? `${trimmedDistrict} จังหวัด${trimmedProvince}` : trimmedProvince ? `จังหวัด${trimmedProvince}` : "(ไม่ระบุพื้นที่)"}
 
-ใช้ข้อมูลพื้นที่เพื่อพิจารณาโรค/แมลงที่มักพบในภูมิศาสตร์นั้น ช่วยวินิจฉัยแม่นยำขึ้น
-
-ตอบกลับเป็น JSON เท่านั้น ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใส่ markdown fence ใช้ schema นี้เท่านั้น:
+ตอบกลับเป็น JSON เท่านั้น ห้ามใส่ markdown fence ใช้ schema นี้:
 {
   "problem_name_th": "ชื่อโรค/แมลงภาษาไทย",
-  "problem_name_sci": "ชื่อวิทยาศาสตร์หรือชื่อสามัญ ถ้าไม่ทราบให้เว้นว่าง",
+  "problem_name_sci": "ชื่อวิทยาศาสตร์หรือชื่อสามัญ",
   "category": "disease | pest | nutrient | unclear",
   "confidence": "high | medium | low",
-  "symptoms": "อธิบายอาการที่พบ 1-2 ประโยค เชื่อมโยงกับสิ่งที่เห็นในภาพ/คำอธิบาย",
-  "cause": "สาเหตุของปัญหา 1-2 ประโยค",
-  "organic_control": ["วิธีป้องกันกำจัดแบบอินทรีย์/เขตกรรม ข้อละสั้นกระชับ ทำได้จริง"],
+  "symptoms": "อธิบายอาการที่พบ 1 ประโยคสั้นกระชับ",
+  "cause": "สาเหตุของปัญหา 1 ประโยค",
+  "organic_control": ["วิธีป้องกันกำจัดแบบอินทรีย์/เขตกรรม 1-2 ข้อ"],
   "chemical_control": [
     {
-      "name": "ชื่อสารออกฤทธิ์ (ชื่อกลุ่มสาร) เช่น แมนโคเซบ (กลุ่ม Dithiocarbamate)",
-      "rate": "อัตราการใช้ที่ชัดเจน เช่น 40-50 กรัม ต่อน้ำ 20 ลิตร",
-      "method": "วิธีใช้และความถี่ เช่น พ่นให้ทั่วใบทั้งด้านบนและใต้ใบ ทุก 5-7 วัน ติดต่อกัน 2-3 ครั้ง",
-      "caution": "ข้อควรระวัง เช่น ระยะเก็บเกี่ยวก่อนพ่นครั้งสุดท้าย, การใส่อุปกรณ์ป้องกัน, ข้อจำกัดการใช้ร่วมกับสารอื่น"
+      "name": "ชื่อสารออกฤทธิ์ (ชื่อกลุ่มสาร)",
+      "rate": "อัตราการใช้",
+      "method": "วิธีใช้และความถี่",
+      "caution": "ข้อควรระวัง"
     }
   ],
-  "prevention": ["วิธีป้องกันไม่ให้เกิดซ้ำในรอบถัดไป"],
-  "need_more_info": "ถ้าข้อมูลไม่พอให้วินิจฉัยแม่นยำ ให้ระบุว่าควรถ่ายภาพเพิ่มมุมไหนหรือให้ข้อมูลอะไรเพิ่ม ถ้าเพียงพอแล้วให้เว้นว่าง"
+  "prevention": ["วิธีป้องกันไม่ให้เกิดซ้ำ"],
+  "need_more_info": "ระบุข้อมูลที่ต้องการเพิ่ม (ถ้าข้อมูลพอแล้วให้เว้นว่าง)"
 }
 
-สำหรับ chemical_control: ให้แนะนำสารป้องกันกำจัดที่ขึ้นทะเบียนถูกต้องตามหลักวิชาการของไทย จำนวน 3 รายการ
-เรียงจากตัวที่แนะนำมากที่สุดไปน้อยที่สุด ควรมาจากกลุ่มสารที่ต่างกันเพื่อลดการดื้อยา ระบุอัตราการใช้และวิธีใช้ให้ชัดเจนพอนำไปปฏิบัติได้จริงในแปลง
+สำหรับ chemical_control: แนะนำสารที่ขึ้นทะเบียนถูกต้อง 2-3 รายการ เรียงจากแนะนำมากไปน้อย สารต่างกลุ่มกัน อธิบายสั้นกระชับ นำไปปฏิบัติได้จริง
 
-ถ้าภาพหรือข้อความไม่เกี่ยวข้องกับพืช/การเกษตรเลย ให้ตั้ง category เป็น "unclear" และอธิบายใน need_more_info 
-ตอบให้กระชับ เน้นใช้ได้จริงในภาคสนาม เกษตรกรอ่านแล้วลงมือทำได้ทันที`;
+ถ้าภาพ/ข้อความไม่เกี่ยวกับเกษตร ตั้ง category เป็น "unclear"`;
 
     parts.push({ text: prompt });
 
@@ -136,7 +128,8 @@ module.exports = async (req, res) => {
         body: JSON.stringify({
           contents: [{ parts }],
           generationConfig: {
-            maxOutputTokens: 2000,
+            maxOutputTokens: 1200,
+            temperature: 0.2,
             responseMimeType: "application/json",
           },
         }),

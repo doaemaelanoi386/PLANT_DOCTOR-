@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>หมอพืชภาคสนาม</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&family=Kanit:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#F1F0E6; --card:#FFFFFF; --forest:#1F3A2E; --forest-deep:#152A20;
+    --clay:#8B4A2E; --clay-deep:#6E3A24; --gold:#C99A2E; --gold-soft:#E9D9A8;
+    --rust:#B23A2E; --rust-soft:#F3DAD4; --ink:#26251F; --ink-soft:#5C5A4E; --line:#DDD8C6;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); font-family:'Sarabun',sans-serif; color:var(--ink); display:flex; justify-content:center; }
+  .wrap { width:100%; max-width:480px; min-height:100vh; background:var(--bg); }
+  .header { background:var(--forest); padding:22px 20px 26px; border-bottom:4px solid var(--gold); }
+  .header-title { display:flex; align-items:center; gap:10px; font-family:'Kanit',sans-serif; font-size:21px; font-weight:600; color:#fff; }
+  .header-sub { font-size:13.5px; color:var(--gold-soft); margin-top:6px; line-height:1.5; }
+  .content { padding:20px 18px 40px; }
+  .drop { position:relative; background:var(--card); border:2px dashed var(--line); border-radius:14px; min-height:168px; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; cursor:pointer; }
+  .drop.has-image { border-color:transparent; }
+  .drop-hint-title { margin-top:8px; font-size:14.5px; font-weight:600; color:var(--forest); }
+  .drop-hint-sub { font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  #preview-wrap { position:relative; width:100%; display:none; }
+  #preview { width:100%; max-height:280px; object-fit:cover; display:block; }
+  .scan-line { position:absolute; left:0; right:0; height:3px; background:linear-gradient(90deg,transparent,var(--gold),transparent); box-shadow:0 0 14px 2px var(--gold); animation:scanline 1.6s ease-in-out infinite; display:none; }
+  @keyframes scanline { 0%{top:0%;opacity:.9;} 50%{opacity:.5;} 100%{top:100%;opacity:.9;} }
+  .remove-btn { position:absolute; top:8px; right:8px; background:rgba(38,37,31,.65); color:#fff; border:none; border-radius:8px; padding:5px 10px; font-size:12.5px; }
+  label.field-label { font-size:13px; font-weight:600; color:var(--forest); margin:14px 0 6px; display:block; }
+  textarea, select.field-select { width:100%; resize:vertical; border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14.5px; background:var(--card); color:var(--ink); font-family:'Sarabun',sans-serif; }
+  select.field-select { appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%235C5A4E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat:no-repeat; background-position:right 12px center; padding-right:34px; }
+  select.field-select:disabled { color:var(--ink-soft); background-color:#F4F3EC; }
+  .location-row { display:flex; gap:10px; margin-top:6px; }
+  .location-row > div { flex:1; }
+  textarea:focus, button:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+  #file-input { display:none; }
+  .analyze-btn { margin-top:16px; width:100%; background:var(--forest); color:#fff; border:none; border-radius:12px; padding:14px 0; font-size:16px; font-weight:600; font-family:'Kanit',sans-serif; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; }
+  .analyze-btn:disabled { background:#B9B6A6; cursor:not-allowed; }
+  .spinner { width:16px; height:16px; border:2.5px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; display:inline-block; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .error-box { margin-top:12px; background:var(--rust-soft); border:1px solid var(--rust); color:var(--clay-deep); border-radius:10px; padding:10px 12px; font-size:13.5px; display:none; }
+  .result-card { background:var(--card); border-radius:16px; overflow:hidden; box-shadow:0 2px 10px rgba(38,37,31,.08); border:1px solid var(--line); display:none; }
+  .result-img { width:100%; height:160px; object-fit:cover; display:none; }
+  .result-body { padding:16px 18px; }
+  .badge { display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.4px; color:#fff; border-radius:999px; padding:3px 10px; margin-bottom:8px; }
+  .result-title { font-family:'Kanit',sans-serif; font-size:20px; font-weight:600; color:var(--forest-deep); line-height:1.3; }
+  .result-sci { font-size:13px; color:var(--ink-soft); font-style:italic; margin-top:2px; }
+  .confidence { font-size:12px; color:var(--ink-soft); margin-top:6px; }
+  .info-box { margin-top:12px; background:var(--gold-soft); border-radius:10px; padding:10px 12px; font-size:13.5px; color:var(--clay-deep); }
+  .section { margin-top:14px; }
+  .section-title { font-size:13px; font-weight:700; color:var(--forest); margin-bottom:3px; }
+  .section-text { font-size:14px; color:var(--ink); line-height:1.55; }
+  ul.list { margin:0; padding-left:0; list-style:none; }
+  ul.list li { font-size:14px; color:var(--ink); line-height:1.55; padding:6px 0; border-top:1px solid var(--line); }
+  ul.list li:first-child { border-top:none; }
+  .reset-btn { margin-top:14px; width:100%; background:transparent; border:1.5px solid var(--forest); color:var(--forest); border-radius:12px; padding:12px 0; font-size:15px; font-weight:600; cursor:pointer; font-family:'Sarabun',sans-serif; }
+  .footer-credit { text-align:center; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); font-size:12px; color:var(--ink-soft); line-height:1.6; }
+  .fade-up { animation:fadeUp .35s ease both; }
+  @keyframes fadeUp { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+  @media (prefers-reduced-motion: reduce) { .scan-line, .fade-up { animation:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="header-title">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 20C4 12 9 5 20 4C19 15 12 20 4 20Z" stroke="#E9D9A8" stroke-width="1.6" stroke-linejoin="round" fill="#E9D9A81A"/><path d="M6 18C10 14 13 10 18 6" stroke="#E9D9A8" stroke-width="1.4" stroke-linecap="round"/></svg>
+      หมอพืชภาคสนาม
+    </div>
+    <div class="header-sub">ถ่ายรูปหรือพิมพ์อาการที่พบ ระบบจะช่วยวินิจฉัยโรค แมลง และแนะนำวิธีป้องกันกำจัด</div>
+  </div>
+
+  <div class="content">
+    <div id="form-section" class="fade-up">
+      <div id="drop" class="drop">
+        <input id="file-input" type="file" accept="image/*" capture="environment" />
+        <div id="preview-wrap">
+          <img id="preview" alt="ภาพพืชที่อัปโหลด" />
+          <div id="scan-line" class="scan-line"></div>
+          <button id="remove-btn" class="remove-btn">ลบรูป</button>
+        </div>
+        <div id="drop-hint">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M4 8.5C4 7.4 4.9 6.5 6 6.5H8.2L9.2 4.7C9.5 4.1 10.1 3.7 10.8 3.7H13.2C13.9 3.7 14.5 4.1 14.8 4.7L15.8 6.5H18C19.1 6.5 20 7.4 20 8.5V17C20 18.1 19.1 19 18 19H6C4.9 19 4 18.1 4 17V8.5Z" stroke="#1F3A2E" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12.5" r="3.2" stroke="#1F3A2E" stroke-width="1.6"/></svg>
+          <div class="drop-hint-title">แตะเพื่อถ่ายรูปหรือเลือกภาพ</div>
+          <div class="drop-hint-sub">ถ่ายให้เห็นใบ ลำต้น หรือจุดที่ผิดปกติชัดเจน</div>
+        </div>
+      </div>
+
+      <label class="field-label" for="text-input">อธิบายอาการ (ไม่บังคับถ้ามีรูปแล้ว)</label>
+      <textarea id="text-input" rows="4" maxlength="1000" placeholder="เช่น ใบข้าวมีจุดสีน้ำตาลขอบเหลือง เริ่มพบ 3 วันก่อน ระบาดเป็นหย่อมๆ"></textarea>
+
+      <label class="field-label">พื้นที่ (ไม่บังคับ)</label>
+      <div class="location-row">
+        <div>
+          <select id="province-select" class="field-select">
+            <option value="">ไม่ระบุจังหวัด</option>
+          </select>
+        </div>
+        <div>
+          <select id="district-select" class="field-select" disabled>
+            <option value="">ไม่ระบุอำเภอ</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="analyze-btn" class="analyze-btn" disabled>วิเคราะห์</button>
+      <div id="error-box" class="error-box"></div>
+    </div>
+
+    <div id="result-section" class="fade-up" style="display:none;">
+      <div id="result-card" class="result-card">
+        <img id="result-img" class="result-img" alt="ภาพที่วิเคราะห์" />
+        <div class="result-body">
+          <div id="badge" class="badge"></div>
+          <div id="result-title" class="result-title"></div>
+          <div id="result-sci" class="result-sci" style="display:none;"></div>
+          <div id="confidence" class="confidence" style="display:none;"></div>
+          <div id="info-box" class="info-box" style="display:none;"></div>
+          <div id="sections"></div>
+        </div>
+      </div>
+      <button id="reset-btn" class="reset-btn">วิเคราะห์รายการใหม่</button>
+    </div>
+
+    <div class="footer-credit">
+      จัดทำโดย สำนักงานเกษตรอำเภอแม่ลาน้อย จังหวัดแม่ฮ่องสอน
+    </div>
+  </div>
+</div>
+
+<script>
+const C = {
+  forest: '#1F3A2E', clay: '#8B4A2E', gold: '#C99A2E', rust: '#B23A2E', inkSoft: '#5C5A4E'
+};
+const CATEGORY_LABEL = { disease: 'โรคพืช', pest: 'แมลง/ศัตรูพืช', nutrient: 'ขาดธาตุอาหาร/สิ่งแวดล้อม', unclear: 'ยังไม่ชัดเจน' };
+const CATEGORY_COLOR = { disease: C.rust, pest: C.clay, nutrient: C.gold, unclear: C.inkSoft };
+const CONF_LABEL = { high: 'สูง', medium: 'ปานกลาง', low: 'ต่ำ' };
+
+let imageBase64 = null;
+let imageMediaType = null;
+let previewUrl = null;
+
+const dropEl = document.getElementById('drop');
+const fileInput = document.getElementById('file-input');
+const previewWrap = document.getElementById('preview-wrap');
+const previewImg = document.getElementById('preview');
+const dropHint = document.getElementById('drop-hint');
+const removeBtn = document.getElementById('remove-btn');
+const textInput = document.getElementById('text-input');
+const provinceSelect = document.getElementById('province-select');
+const districtSelect = document.getElementById('district-select');
+const analyzeBtn = document.getElementById('analyze-btn');
+const errorBox = document.getElementById('error-box');
+const scanLine = document.getElementById('scan-line');
+const formSection = document.getElementById('form-section');
+const resultSection = document.getElementById('result-section');
+
+// Load Thailand province/district list (public dataset) so farmers pick from a
+// dropdown instead of typing. Both fields stay optional.
+let districtsByProvince = {};
+(async function loadLocationData() {
+  try {
+    const [provRes, distRes] = await Promise.all([
+      fetch('https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/province.json'),
+      fetch('https://raw.githubusercontent.com/kongvut/thai-province-data/refs/heads/master/api/latest/district.json'),
+    ]);
+    const provinces = await provRes.json();
+    const districts = await distRes.json();
+
+    districts.forEach(d => {
+      if (!districtsByProvince[d.province_id]) districtsByProvince[d.province_id] = [];
+      districtsByProvince[d.province_id].push(d);
+    });
+
+    provinces
+      .sort((a, b) => a.name_th.localeCompare(b.name_th, 'th'))
+      .forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name_th;
+        opt.textContent = p.name_th;
+        opt.dataset.id = p.id;
+        provinceSelect.appendChild(opt);
+      });
+  } catch (e) {
+    // If the location list fails to load (e.g. offline), leave the selects
+    // as "ไม่ระบุ" only — location stays optional so the app still works.
+    provinceSelect.disabled = true;
+    districtSelect.disabled = true;
+  }
+})();
+
+provinceSelect.addEventListener('change', () => {
+  const selectedOption = provinceSelect.selectedOptions[0];
+  districtSelect.innerHTML = '<option value="">ไม่ระบุอำเภอ</option>';
+  const provinceId = selectedOption && selectedOption.dataset.id;
+  if (!provinceId) {
+    districtSelect.disabled = true;
+    return;
+  }
+  const list = (districtsByProvince[provinceId] || []).slice()
+    .sort((a, b) => a.name_th.localeCompare(b.name_th, 'th'));
+  list.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.name_th;
+    opt.textContent = d.name_th;
+    districtSelect.appendChild(opt);
+  });
+  districtSelect.disabled = list.length === 0;
+});
+
+function updateAnalyzeState() {
+  analyzeBtn.disabled = !(imageBase64 || textInput.value.trim().length > 0);
+}
+
+dropEl.addEventListener('click', () => fileInput.click());
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8MB
+
+fileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    errorBox.textContent = 'รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, WEBP หรือ GIF เท่านั้น';
+    errorBox.style.display = 'block';
+    fileInput.value = '';
+    return;
+  }
+  if (file.size > MAX_FILE_SIZE) {
+    errorBox.textContent = 'ไฟล์รูปใหญ่เกินไป (ไม่เกิน 8MB)';
+    errorBox.style.display = 'block';
+    fileInput.value = '';
+    return;
+  }
+  errorBox.style.display = 'none';
+  imageMediaType = file.type;
+  imageBase64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1]);
+    reader.onerror = () => reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+    reader.readAsDataURL(file);
+  });
+  previewUrl = URL.createObjectURL(file);
+  previewImg.src = previewUrl;
+  previewWrap.style.display = 'block';
+  dropHint.style.display = 'none';
+  dropEl.classList.add('has-image');
+  updateAnalyzeState();
+});
+removeBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  imageBase64 = null; imageMediaType = null; previewUrl = null;
+  previewWrap.style.display = 'none';
+  dropHint.style.display = 'flex';
+  dropEl.classList.remove('has-image');
+  fileInput.value = '';
+  updateAnalyzeState();
+});
+textInput.addEventListener('input', updateAnalyzeState);
+
+analyzeBtn.addEventListener('click', async () => {
+  if (analyzeBtn.disabled) return;
+  errorBox.style.display = 'none';
+  analyzeBtn.disabled = true;
+  analyzeBtn.innerHTML = '<span class="spinner"></span> กำลังวิเคราะห์...';
+  scanLine.style.display = imageBase64 ? 'block' : 'none';
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64,
+        imageMediaType,
+        text: textInput.value.trim(),
+        province: provinceSelect.value,
+        district: districtSelect.value,
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด กรุณาลองใหม่');
+    showResult(data);
+  } catch (err) {
+    errorBox.textContent = err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่';
+    errorBox.style.display = 'block';
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = 'วิเคราะห์';
+    scanLine.style.display = 'none';
+  }
+});
+
+function el(tag, props = {}, children = []) {
+  const e = document.createElement(tag);
+  Object.assign(e, props);
+  children.forEach(c => e.appendChild(c));
+  return e;
+}
+
+function showResult(result) {
+  formSection.style.display = 'none';
+  resultSection.style.display = 'block';
+  document.getElementById('result-card').style.display = 'block';
+
+  const resultImg = document.getElementById('result-img');
+  if (previewUrl) { resultImg.src = previewUrl; resultImg.style.display = 'block'; }
+  else { resultImg.style.display = 'none'; }
+
+  const badge = document.getElementById('badge');
+  badge.style.background = CATEGORY_COLOR[result.category] || C.clay;
+  badge.textContent = CATEGORY_LABEL[result.category] || 'ตรวจพบ';
+
+  document.getElementById('result-title').textContent = result.problem_name_th || 'ไม่สามารถระบุได้ชัดเจน';
+
+  const sci = document.getElementById('result-sci');
+  if (result.problem_name_sci) { sci.textContent = result.problem_name_sci; sci.style.display = 'block'; }
+  else sci.style.display = 'none';
+
+  const conf = document.getElementById('confidence');
+  if (result.confidence) {
+    conf.innerHTML = 'ความมั่นใจในการวินิจฉัย: <strong style="color:' + C.forest + '">' + (CONF_LABEL[result.confidence] || result.confidence) + '</strong>';
+    conf.style.display = 'block';
+  } else conf.style.display = 'none';
+
+  const info = document.getElementById('info-box');
+  if (result.need_more_info) { info.textContent = '💡 ' + result.need_more_info; info.style.display = 'block'; }
+  else info.style.display = 'none';
+
+  const sections = document.getElementById('sections');
+  sections.innerHTML = '';
+  if (result.symptoms) sections.appendChild(makeSection('อาการที่พบ', result.symptoms));
+  if (result.cause) sections.appendChild(makeSection('สาเหตุ', result.cause));
+  if (Array.isArray(result.organic_control) && result.organic_control.length) sections.appendChild(makeList('🌿 วิธีป้องกันกำจัดแบบอินทรีย์', result.organic_control));
+  if (Array.isArray(result.chemical_control) && result.chemical_control.length) sections.appendChild(makeList('🧪 สารป้องกันกำจัดตามหลักวิชาการ', result.chemical_control));
+  if (Array.isArray(result.prevention) && result.prevention.length) sections.appendChild(makeList('🛡️ ป้องกันไม่ให้เกิดซ้ำ', result.prevention));
+}
+
+function makeSection(title, text) {
+  return el('div', { className: 'section' }, [
+    el('div', { className: 'section-title', textContent: title }),
+    el('div', { className: 'section-text', textContent: text })
+  ]);
+}
+function makeList(title, items) {
+  const ul = el('ul', { className: 'list' });
+  items.forEach(it => ul.appendChild(el('li', { textContent: it })));
+  return el('div', { className: 'section' }, [
+    el('div', { className: 'section-title', textContent: title }),
+    ul
+  ]);
+}
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  imageBase64 = null; imageMediaType = null; previewUrl = null;
+  previewWrap.style.display = 'none';
+  dropHint.style.display = 'flex';
+  dropEl.classList.remove('has-image');
+  fileInput.value = '';
+  textInput.value = '';
+  provinceSelect.value = '';
+  districtSelect.innerHTML = '<option value="">ไม่ระบุอำเภอ</option>';
+  districtSelect.disabled = true;
+  errorBox.style.display = 'none';
+  analyzeBtn.disabled = true;
+  analyzeBtn.textContent = 'วิเคราะห์';
+  formSection.style.display = 'block';
+  resultSection.style.display = 'none';
+});
+</script>
+</body>
+</html>

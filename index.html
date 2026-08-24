@@ -55,6 +55,11 @@
   ul.list { margin:0; padding-left:0; list-style:none; }
   ul.list li { font-size:14px; color:var(--ink); line-height:1.55; padding:6px 0; border-top:1px solid var(--line); }
   ul.list li:first-child { border-top:none; }
+  .chem-card { background:#F8F6EE; border:1px solid var(--line); border-left:3px solid var(--clay); border-radius:8px; padding:10px 12px; margin-bottom:8px; }
+  .chem-card:last-child { margin-bottom:0; }
+  .chem-name { font-size:14px; font-weight:700; color:var(--clay-deep); margin-bottom:4px; }
+  .chem-row { font-size:13px; color:var(--ink); line-height:1.5; margin-top:3px; }
+  .chem-row b { color:var(--forest); font-weight:600; }
   .reset-btn { margin-top:14px; width:100%; background:transparent; border:1.5px solid var(--forest); color:var(--forest); border-radius:12px; padding:12px 0; font-size:15px; font-weight:600; cursor:pointer; font-family:'Sarabun',sans-serif; }
   .footer-credit { text-align:center; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); font-size:12px; color:var(--ink-soft); line-height:1.6; }
   .fade-up { animation:fadeUp .35s ease both; }
@@ -331,7 +336,7 @@ function showResult(result) {
   if (result.symptoms) sections.appendChild(makeSection('อาการที่พบ', result.symptoms));
   if (result.cause) sections.appendChild(makeSection('สาเหตุ', result.cause));
   if (Array.isArray(result.organic_control) && result.organic_control.length) sections.appendChild(makeList('🌿 วิธีป้องกันกำจัดแบบอินทรีย์', result.organic_control));
-  if (Array.isArray(result.chemical_control) && result.chemical_control.length) sections.appendChild(makeList('🧪 สารป้องกันกำจัดตามหลักวิชาการ', result.chemical_control));
+  if (Array.isArray(result.chemical_control) && result.chemical_control.length) sections.appendChild(makeChemSection('🧪 สารป้องกันกำจัดที่แนะนำ', result.chemical_control));
   if (Array.isArray(result.prevention) && result.prevention.length) sections.appendChild(makeList('🛡️ ป้องกันไม่ให้เกิดซ้ำ', result.prevention));
 }
 
@@ -348,6 +353,34 @@ function makeList(title, items) {
     el('div', { className: 'section-title', textContent: title }),
     ul
   ]);
+}
+
+function makeChemSection(title, items) {
+  const wrap = el('div', { className: 'section' }, [
+    el('div', { className: 'section-title', textContent: title })
+  ]);
+  items.forEach((item, i) => {
+    // Support both the new structured object format and a plain string as a fallback
+    if (typeof item === 'string') {
+      wrap.appendChild(el('div', { className: 'chem-card' }, [
+        el('div', { className: 'chem-name', textContent: item })
+      ]));
+      return;
+    }
+    const card = el('div', { className: 'chem-card' });
+    card.appendChild(el('div', { className: 'chem-name', textContent: (i + 1) + '. ' + (item.name || '') }));
+    if (item.rate) card.appendChild(el('div', { className: 'chem-row', innerHTML: '<b>อัตราการใช้:</b> ' + escapeHtml(item.rate) }));
+    if (item.method) card.appendChild(el('div', { className: 'chem-row', innerHTML: '<b>วิธีใช้:</b> ' + escapeHtml(item.method) }));
+    if (item.caution) card.appendChild(el('div', { className: 'chem-row', innerHTML: '<b>ข้อควรระวัง:</b> ' + escapeHtml(item.caution) }));
+    wrap.appendChild(card);
+  });
+  return wrap;
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
 }
 
 document.getElementById('reset-btn').addEventListener('click', () => {

@@ -1,47 +1,28 @@
-// Serverless function (Vercel). Keeps the Gemini API key secret on the server.
-// Deploy this whole folder to Vercel and set the GEMINI_API_KEY environment variable
-// in the Vercel project settings (Settings -> Environment Variables).
-
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB decoded
+// Serverless function (Vercel)
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // ขยายรองรับสูงสุด 10MB
 const MAX_TEXT_LENGTH = 1000;
 const MAX_LOCATION_LENGTH = 100;
-const MAGIC_BYTES = {
-  "image/jpeg": [[0xff, 0xd8, 0xff]],
-  "image/png": [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
-  "image/webp": [[0x52, 0x49, 0x46, 0x46]],
-  "image/gif": [
-    [0x47, 0x49, 0x46, 0x38, 0x37, 0x61],
-    [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
-  ],
-};
-
-function matchesSignature(buf, signature) {
-  if (buf.length < signature.length) return false;
-  return signature.every((byte, i) => buf[i] === byte);
-}
-
-function isGenuineImage(buf, declaredType) {
-  const signatures = MAGIC_BYTES[declaredType];
-  if (!signatures) return false;
-  const matchesDeclared = signatures.some((sig) => matchesSignature(buf, sig));
-  if (!matchesDeclared) return false;
-  if (declaredType === "image/webp") {
-    const webpMarker = buf.slice(8, 12).toString("ascii");
-    if (webpMarker !== "WEBP") return false;
-  }
-  return true;
-}
 
 module.exports = async (req, res) => {
-  if (req.method !== "POST") {
-    res.status(405).json({ error: "Method not allowed" });
+  // รองรับ CORS ให้เรียกจากมือถือได้ทุก OS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     res.status(500).json({
-      error: "ยังไม่ได้ตั้งค่า GEMINI_API_KEY บนเซิร์ฟเวอร์ กรุณาตั้งค่าใน Vercel > Settings > Environment Variables",
+      error: 'ยังไม่ได้ตั้งค่า GEMINI_API_KEY บนเซิร์ฟเวอร์ กรุณาตั้งค่าใน Vercel Settings'
     });
     return;
   }
@@ -49,39 +30,35 @@ module.exports = async (req, res) => {
   try {
     const { imageBase64, imageMediaType, text, province, district } = req.body || {};
 
-    const trimmedText = (text || "").trim().slice(0, MAX_TEXT_LENGTH);
-    const trimmedProvince = (province || "").trim().slice(0, MAX_LOCATION_LENGTH);
-    const trimmedDistrict = (district || "").trim().slice(0, MAX_LOCATION_LENGTH);
+    const trimmedText = (text || '').trim().slice(0, MAX_TEXT_LENGTH);
+    const trimmedProvince = (province || '').trim().slice(0, MAX_LOCATION_LENGTH);
+    const trimmedDistrict = (district || '').trim().slice(0, MAX_LOCATION_LENGTH);
 
     if (!imageBase64 && !trimmedText) {
-      res.status(400).json({ error: "กรุณาแนบรูปหรือพิมพ์อาการอย่างน้อยหนึ่งอย่าง" });
+      res.status(400).json({ error: 'กรุณาแนบรูปหรือพิมพ์อาการอย่างน้อยหนึ่งอย่าง' });
       return;
     }
 
-    let imageBuffer = null;
-    if (imageBase64) {
-      try {
-        imageBuffer = Buffer.from(imageBase64, "base64");
-      } catch (e) {
-        res.status(400).json({ error: "ไฟล์รูปไม่ถูกต้อง" });
-        return;
-      }
-      if (imageBuffer.length === 0 || imageBuffer.length > MAX_IMAGE_BYTES) {
-        res.status(400).json({ error: "ไฟล์รูปใหญ่เกินไปหรือไม่ถูกต้อง (ไม่เกิน 8MB)" });
-        return;
-      }
-      if (!isGenuineImage(imageBuffer, imageMediaType)) {
-        res.status(400).json({ error: "รองรับเฉพาะไฟล์รูปภาพ JPG, PNG, WEBP หรือ GIF เท่านั้น" });
-        return;
-      }
-    }
-
     const parts = [];
+
     if (imageBase64) {
+      // 1. ตัด Prefix data:image/...;base64, ออก ทั้งของ iOS และ Android
+      let cleanBase64 = imageBase64;
+      if (cleanBase64.includes(',')) {
+        cleanBase64 = cleanBase64.split(',')[1];
+      }
+      cleanBase64 = cleanBase64.trim();
+
+      // 2. ปรับ MIME Type ให้มาตรฐาน (หาก Android/iOS ส่ง MIME แปลกๆ มา)
+      let mimeType = imageMediaType || 'image/jpeg';
+      if (mimeType.includes('heic') || mimeType.includes('heif')) {
+        mimeType = 'image/jpeg'; // Fallback สำหรับรูปฟอร์แมต iPhone HEIC
+      }
+
       parts.push({
         inlineData: {
-          mimeType: imageMediaType,
-          data: imageBase64,
+          mimeType: mimeType,
+          data: cleanBase64,
         },
       });
     }
@@ -111,18 +88,19 @@ module.exports = async (req, res) => {
 
     parts.push({ text: prompt });
 
-    const model = "gemini-2.5-flash";
+    // ใช้โมเดล gemini-2.5-flash
+    const model = 'gemini-2.5-flash';
     const geminiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts }],
           generationConfig: {
             maxOutputTokens: 1200,
             temperature: 0.2,
-            responseMimeType: "application/json",
+            responseMimeType: 'application/json',
           },
         }),
       }
@@ -130,20 +108,21 @@ module.exports = async (req, res) => {
 
     if (!geminiRes.ok) {
       const detail = await geminiRes.text();
-      res.status(502).json({ error: "เชื่อมต่อระบบวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่", detail });
+      console.error('Gemini API Error:', detail);
+      res.status(502).json({ error: 'เชื่อมต่อระบบวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่', detail });
       return;
     }
 
     const data = await geminiRes.json();
     const textOut = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!textOut) {
-      res.status(502).json({ error: "ไม่ได้รับคำตอบจากระบบวิเคราะห์ กรุณาลองใหม่" });
+      res.status(502).json({ error: 'ไม่ได้รับคำตอบจากระบบวิเคราะห์ กรุณาลองใหม่' });
       return;
     }
 
-    let cleaned = textOut.replace(/```json|```/g, "").trim();
-    const start = cleaned.indexOf("{");
-    const end = cleaned.lastIndexOf("}");
+    let cleaned = textOut.replace(/```json|```/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
     if (start !== -1 && end !== -1 && end > start) {
       cleaned = cleaned.slice(start, end + 1);
     }
@@ -152,12 +131,13 @@ module.exports = async (req, res) => {
     try {
       parsed = JSON.parse(cleaned);
     } catch (e) {
-      res.status(502).json({ error: "ผลวิเคราะห์ไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง" });
+      res.status(502).json({ error: 'ผลวิเคราะห์ไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง' });
       return;
     }
 
     res.status(200).json(parsed);
   } catch (err) {
-    res.status(500).json({ error: "เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่", detail: String(err) });
+    console.error('System Error:', err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่', detail: String(err) });
   }
 };

@@ -107,50 +107,69 @@ module.exports = async (req, res) => {
   "symptoms": "อธิบายอาการที่พบ 1-2 ประโยค เชื่อมโยงกับสิ่งที่เห็นในภาพ/คำอธิบาย",
   "cause": "สาเหตุของปัญหา 1-2 ประโยค",
   "organic_control": ["วิธีป้องกันกำจัดแบบอินทรีย์/เขตกรรม ข้อละสั้นกระชับ ทำได้จริง"],
-  "chemical_control": [
-    {
-      "name": "ชื่อสารออกฤทธิ์ (ชื่อกลุ่มสาร) เช่น แมนโคเซบ (กลุ่ม Dithiocarbamate)",
-      "rate": "อัตราการใช้ที่ชัดเจน เช่น 40-50 กรัม ต่อน้ำ 20 ลิตร",
-      "method": "วิธีใช้และความถี่ เช่น พ่นให้ทั่วใบทั้งด้านบนและใต้ใบ ทุก 5-7 วัน ติดต่อกัน 2-3 ครั้ง",
-      "caution": "ข้อควรระวัง เช่น ระยะเก็บเกี่ยวก่อนพ่นครั้งสุดท้าย, การใส่อุปกรณ์ป้องกัน, ข้อจำกัดการใช้ร่วมกับสารอื่น"
-    }
-  ],
+  "chemical_control": ["ชื่อสารออกฤทธิ์หรือชื่อกลุ่มสาร สั้นกระชับ"],
   "prevention": ["วิธีป้องกันไม่ให้เกิดซ้ำในรอบถัดไป"],
   "need_more_info": "ถ้าข้อมูลไม่พอให้วินิจฉัยแม่นยำ ให้ระบุว่าควรถ่ายภาพเพิ่มมุมไหนหรือให้ข้อมูลอะไรเพิ่ม ถ้าเพียงพอแล้วให้เว้นว่าง"
 }
 
-สำหรับ chemical_control: ให้แนะนำสารป้องกันกำจัดที่ขึ้นทะเบียนถูกต้องตามหลักวิชาการของไทย จำนวน 3 รายการ
-เรียงจากตัวที่แนะนำมากที่สุดไปน้อยที่สุด ควรมาจากกลุ่มสารที่ต่างกันเพื่อลดการดื้อยา ระบุอัตราการใช้และวิธีใช้ให้ชัดเจนพอนำไปปฏิบัติได้จริงในแปลง
+สำหรับ chemical_control: ให้ระบุชื่อสารป้องกันกำจัดที่ขึ้นทะเบียนถูกต้องตามหลักวิชาการของไทย จำนวน 3 รายการเท่านั้น
+เรียงจากตัวที่แนะนำมากที่สุดไปน้อยที่สุด ควรมาจากกลุ่มสารที่ต่างกันเพื่อลดการดื้อยา ระบุแค่ชื่อสาร ไม่ต้องมีอัตราการใช้หรือรายละเอียดอื่น
 
 ถ้าภาพหรือข้อความไม่เกี่ยวข้องกับพืช/การเกษตรเลย ให้ตั้ง category เป็น "unclear" และอธิบายใน need_more_info 
 ตอบให้กระชับ เน้นใช้ได้จริงในภาคสนาม เกษตรกรอ่านแล้วลงมือทำได้ทันที`;
 
     parts.push({ text: prompt });
 
-    const model = "gemini-3.6-flash";
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
+    const model = "gemini-flash-latest";
+    const fallbackModel = "gemini-2.5-flash"; // used only if the floating alias itself fails
+    const buildUrl = (m) =>
+      `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+    const requestBody = JSON.stringify({
+      contents: [{ parts }],
+      generationConfig: {
+        maxOutputTokens: 2500,
+        responseMimeType: "application/json",
+        thinkingConfig: { thinkingLevel: "low" },
+      },
+    });
+
+    // Google's servers occasionally return a transient error (overloaded / rate
+    // limited) even when the request itself is fine. Retry a couple of times
+    // with a short backoff before giving up, so the farmer doesn't have to
+    // notice and tap "วิเคราะห์" again themselves. If the floating "latest"
+    // alias itself is ever briefly broken (404), fall back to a pinned model
+    // instead of failing outright.
+    const TRANSIENT_STATUS = new Set([429, 500, 502, 503, 504]);
+    let geminiRes;
+    let lastErrorDetail = "";
+    let currentModel = model;
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      geminiRes = await fetch(buildUrl(currentModel), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            maxOutputTokens: 2000,
-            responseMimeType: "application/json",
-          },
-        }),
+        body: requestBody,
+      });
+      if (geminiRes.ok) break;
+      lastErrorDetail = await geminiRes.text();
+      if (geminiRes.status === 404 && currentModel !== fallbackModel) {
+        currentModel = fallbackModel; // alias unavailable — switch and retry immediately
+        continue;
       }
-    );
+      const shouldRetry = TRANSIENT_STATUS.has(geminiRes.status) && attempt < maxAttempts;
+      if (!shouldRetry) break;
+      await new Promise((r) => setTimeout(r, 600 * attempt)); // 600ms, then 1200ms
+    }
+
 
     if (!geminiRes.ok) {
-      const detail = await geminiRes.text();
-      res.status(502).json({ error: "เชื่อมต่อระบบวิเคราะห์ไม่สำเร็จ กรุณาลองใหม่", detail });
+      res.status(502).json({ error: "ระบบวิเคราะห์กำลังไม่ว่างชั่วคราว กรุณาลองใหม่อีกครั้งในสักครู่", detail: lastErrorDetail });
       return;
     }
 
     const data = await geminiRes.json();
-    const textOut = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const candidate = data?.candidates?.[0];
+    const textOut = candidate?.content?.parts?.[0]?.text;
     if (!textOut) {
       res.status(502).json({ error: "ไม่ได้รับคำตอบจากระบบวิเคราะห์ กรุณาลองใหม่" });
       return;
@@ -167,7 +186,13 @@ module.exports = async (req, res) => {
     try {
       parsed = JSON.parse(cleaned);
     } catch (e) {
-      res.status(502).json({ error: "ผลวิเคราะห์ไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง" });
+      console.error("JSON parse failed. finishReason:", candidate?.finishReason, "raw text:", textOut);
+      const truncated = candidate?.finishReason === "MAX_TOKENS";
+      res.status(502).json({
+        error: truncated
+          ? "คำตอบยาวเกินขีดจำกัด กรุณาลองใหม่อีกครั้ง"
+          : "ผลวิเคราะห์ไม่สมบูรณ์ กรุณาลองใหม่อีกครั้ง",
+      });
       return;
     }
 
